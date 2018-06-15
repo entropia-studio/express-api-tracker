@@ -19,12 +19,18 @@
     "node": "6.9.1"
   },
   "repository": {
-    "url": "https://github.com/entropia-studio/express-api-tracker"
+    "url": "git+https://github.com/entropia-studio/express-api-tracker.git"
   },
   "license": "MIT",
   "keywords": [
     "node",
     "gomix",
     "express"
-  ]
+  ],
+  "bugs": {
+    "url": "https://github.com/entropia-studio/express-api-tracker/issues"
+  },
+  "homepage": "https://github.com/entropia-studio/express-api-tracker#readme",
+  "devDependencies": {},
+  "author": ""
 }

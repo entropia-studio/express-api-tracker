@@ -3,7 +3,7 @@ const app = express()
 const bodyParser = require('body-parser')
 
 const cors = require('cors')
-const { check } = require('express-validator/check');
+const { check, validationResult } = require('express-validator/check');
 
 
 app.use(cors())
@@ -21,17 +21,7 @@ app.get('/', (req, res) => {
 var datastore = require("./datastore");
 datastore.connect();
 
-/*
-// Not found middleware
-app.use((req, res, next) => {
-  return next({status: 404, message: 'not found'})
-})
-*/
-
-
-
-
-app.post("/api/exercise/new-user", (req,res) => {  
+app.post("/api/exercise/new-user",(req,res) => {  
   try{
     datastore.addUser(req.body.username)
     .then((result) => {
@@ -49,8 +39,8 @@ app.post("/api/exercise/add",
           check('userId').
             trim().
             custom(value => {
-              return datastore.userExists(value).then(exists => {
-                if (!exists) throw new Error(`User $(value) doesn't exist`);
+              return datastore.userIdExists(value).then(exists => {                
+                if (!exists) throw new Error(`User doesn't exist`);
               })
             }),
           check('description').
@@ -58,20 +48,35 @@ app.post("/api/exercise/add",
           check('duration').
             isInt(),
           check('date').
-            isDate()
+            custom(value => {
+              return (checkDate(value)).then(isValid => {
+                if (!isValid) throw new Error(`Date is not correct`)
+              }) ;
+            })
           ]
          ,(req,res) => {  
-  try{
-    datastore.addExercise(req.body)
-    .then((result) => {
-      res.json(result);
-    },error => {
-      handleError(error, res);      
-    });
-  }catch(e){
-    handleError(e, res);
-  }  
-})
+            const errors = validationResult(req);
+            if (!errors.isEmpty()){
+              return res.status(422).json({ errors: errors.mapped() });
+            }
+            try{
+              datastore.addExercise(req.body)
+              .then((result) => {
+                let exerciseJson = {
+                  "userId"      : result.userId,
+                  "description" : result.description,
+                  "duration"    : result.duration,
+                  "date"        : result.dateCreated                  
+                };
+                res.json(exerciseJson);
+              },error => {
+                handleError(error, res);      
+              });
+            }catch(e){
+              handleError(e, res);
+            }  
+          }
+)
 
 
 
@@ -94,28 +99,37 @@ app.use((err, req, res, next) => {
     .send(errMessage)
 })
 
+app.get("/api/exercise/log",(req,res) => {  
+  try{
+    datastore.getUserExercises(req).then(docs => {
+      res.json(docs);
+    },error => {
+      handleError(error, res);
+    })        
+  }catch(e){
+    handleError(e, res);
+  }      
+})
+
 
 const listener = app.listen(process.env.PORT || 3000, () => {
   console.log('Your app is listening on port ' + listener.address().port)
-  datastore.userExists('javierx')
-    .then(result => {
-      console.log(result)
-    },error => {
-      console.error(error)
-    })
 })
 
 function handleError(err, response) {  
-  response.status(500);
-  if (err.error.code){
-    switch (err.error.code){
-      case 11000:
-        response.send("username already taken");
-        break;
-    }
-  }
+  response.status(500);  
   response.send(
     "<html><head><title>Internal Server Error!</title></head><body><pre>"
     + JSON.stringify(err, null, 2) + "</pre></body></pre>"
   );
+}
+
+function checkDate(date){
+  return new Promise((resolve,reject) => {
+    try{
+      resolve(Date.parse(date).isNaN ? false : true);      
+    }catch(e){
+      reject(false);
+    }
+  })
 }

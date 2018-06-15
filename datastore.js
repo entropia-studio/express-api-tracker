@@ -1,7 +1,7 @@
 "use strict";
-//const { check } = require('express-validator/check');
 const mongoose = require('mongoose');
 var shortid = require('shortid');
+const moment = require('moment');
 
 var options = { server: { socketOptions: { keepAlive: 300000, connectTimeoutMS: 30000 } },
                 useMongoClient: true,
@@ -23,7 +23,7 @@ var exerciseSchema = mongoose.Schema({
   userId: {type: String, required: true},
   description: {type: String, required: true},
   duration: {type: Number, required: true},
-  dateCreated: {type: Date, required: true}
+  date: {type: Date, required: true}
 })
 
 const Exercise = mongoose.model('Exercise',exerciseSchema);
@@ -41,30 +41,32 @@ function connect(){
 function addUser(userName){
   return new Promise((resolve,reject) => {
     try{
-          
-      let user = new User({userId: shortid.generate(),
+      userNameExists(userName).then(exists => {
+        if (exists) reject(new DataStoreFieldValidationException(userName,"Username already exists"))
+        let user = new User({userId: shortid.generate(),
                            name: userName,
                            createdAt: Date.now()
                           })
       
-      user.save((error, result) => {
-        if (error) reject (new DataStoreUnknowException("insert",userName,error))
-        resolve(result);
-      })
+        user.save((error, result) => {
+          if (error) reject (new DataStoreUnknowException("insert",userName,error))
+          resolve(result);
+        })
+      })    
+      
     }catch(e){
       reject(new DataStoreUnknowException("insert",userName,e));
     }
   })
 }
 
-function userExists(userName){
+function userNameExists(userName){
   return new Promise((resolve, reject)=>{
     try{      
       User.find({name: userName})
-          .exec((error,result) => {
-            //if (error) reject(new DataStoreFieldValidationException("not user",userName,error));
+          .exec((error,result) => {            
              if (error) reject(error);
-            resolve(result.length > 0 ? true : false);
+             resolve(result.length > 0 ? true : false);
       })
     }catch(e){
       reject(new DataStoreFieldValidationException("user",userName,e));
@@ -72,13 +74,67 @@ function userExists(userName){
   })
 }
 
+function userIdExists(userId){
+  return new Promise((resolve, reject)=>{
+    try{      
+      User.find({userId: userId})
+          .exec((error,result) => {            
+             if (error) reject(error);
+             resolve(result.length > 0 ? true : false);
+      })
+    }catch(e){
+      reject(new DataStoreFieldValidationException("userId",userId,e));
+    }
+  })
+}
+
+function getUserExercises(req){
+  return new Promise((resolve,reject) => {
+    try{
+      if (req.query.userId){
+        var query = Exercise.find({userId: req.query.userId});        
+        if (req.query.from && req.query.to){          
+          query = Exercise.find({userId: req.query.userId, date: {$gte: req.query.from ,$lte: req.query.to}});                  
+        } else if (req.query.from){
+          query = Exercise.find({userId: req.query.userId, date: {$gte: req.query.from}});                  
+        } else if (req.query.to){
+          query = Exercise.find({userId: req.query.userId, date: {$lte: req.query.to}});                  
+        }        
+        if (req.query.limit){
+          query = query.limit(+req.query.limit);
+        }        
+        
+        query.exec((error,docs) => {
+          if (error) reject(new DataStoreUnknowException("find",req,error))          
+          
+          var logs = [];
+          
+          docs.forEach(document => {
+            logs.push({"description" : document.description, "duration" : document.duration, "date" : document.date});
+          })
+          
+          var json = {"_id"   : req.query.userId,
+                      "count" : docs.length,
+                      "logs"  : logs
+                     }
+          
+          resolve(json);
+        })
+      }
+    }catch(e){
+      reject(new DataStoreUnknowException("find",req,e))
+    }
+  })
+}
+
+
 function addExercise(request){
   return new Promise((resolve, reject)=>{
     try{
       let exercise = new Exercise({userId     : request.userId,
                                   description : request.description,
                                   duration    : request.duration,
-                                  date        : request.date})
+                                  date : request.date})
       exercise.save((error,result) => {
         if (error) reject(new DataStoreUnknowException("insert",request,error))
         resolve(result);
@@ -88,8 +144,6 @@ function addExercise(request){
     }
   })
 }
-
-
 
 // Exception objects
 
@@ -116,5 +170,6 @@ module.exports = {
   connect,
   addUser,
   addExercise,
-  userExists
+  userIdExists,    
+  getUserExercises
 }
