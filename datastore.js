@@ -1,7 +1,6 @@
 "use strict";
 const mongoose = require('mongoose');
 var shortid = require('shortid');
-const moment = require('moment');
 
 var options = { server: { socketOptions: { keepAlive: 300000, connectTimeoutMS: 30000 } },
                 useMongoClient: true,
